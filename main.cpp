@@ -3,7 +3,7 @@
 #include "mathFunctions.h"
 #include "pluginImplement.h"
 #include "tensorNet.h"
-#include "loadImage.h"
+#include "util/loadImage.h"
 #include "imageBuffer.h"
 #include <chrono>
 #include <thread>
@@ -125,56 +125,77 @@ int main(int argc, char *argv[])
 //    frame = cv::imread(imgFile);
     std::thread readTread(readPicture);
     readTread.detach();
-    while(1){
-    imageBuffer->consume(frame);
 
-    srcImg = frame.clone();
-    cv::resize(frame, frame, cv::Size(300,300));
+    cv::VideoCapture capture;
+    capture.open(0);//open 根据编号打开摄像头
+    std::cout<<"-------------"<<std::endl;
+    if (!capture.isOpened())
+    {
+        std::cout << "Read video Failed !" << std::endl;
+        return 0;
+    }
+
+    int rw = 300;
+    int rh = 300;
+
+    const size_t rsize = rw * rh * sizeof(float3);
+
     const size_t size = width * height * sizeof(float3);
-
-    if( CUDA_FAILED( cudaMalloc( &imgCUDA, size)) )
+    if( CUDA_FAILED( cudaMalloc( &imgCUDA, rsize)) )
     {
         cout <<"Cuda Memory allocation error occured."<<endl;
         return false;
     }
-
-    void* imgData = malloc(size);
-    memset(imgData,0,size);
-
-    loadImg(frame,height,width,(float*)imgData,make_float3(127.5,127.5,127.5),0.007843);
-    cudaMemcpyAsync(imgCUDA,imgData,size,cudaMemcpyHostToDevice);
+    void* imgData = malloc(rsize);
+    memset(imgData,0,rsize);
 
     void* buffers[] = { imgCUDA, output };
-
-    timer.tic();
-    tensorNet.imageInference( buffers, output_vector.size() + 1, BATCH_SIZE);
-    timer.toc();
-    double msTime = timer.t;
-
     vector<vector<float> > detections;
 
-    for (int k=0; k<100; k++)
-    {
-        if(output[7*k+1] == -1)
-            break;
-        float classIndex = output[7*k+1];
-        float confidence = output[7*k+2];
-        float xmin = output[7*k + 3];
-        float ymin = output[7*k + 4];
-        float xmax = output[7*k + 5];
-        float ymax = output[7*k + 6];
-        std::cout << classIndex << " , " << confidence << " , "  << xmin << " , " << ymin<< " , " << xmax<< " , " << ymax << std::endl;
-        int x1 = static_cast<int>(xmin * srcImg.cols);
-        int y1 = static_cast<int>(ymin * srcImg.rows);
-        int x2 = static_cast<int>(xmax * srcImg.cols);
-        int y2 = static_cast<int>(ymax * srcImg.rows);
-        cv::rectangle(srcImg,cv::Rect2f(cv::Point(x1,y1),cv::Point(x2,y2)),cv::Scalar(255,0,255),1);
+    while(1){
+        //imageBuffer->consume(frame);
+        capture >> frame;
 
+        srcImg = frame.clone();
+        //cv::resize(frame, frame, cv::Size(300,300));
+        cv::resize(frame, frame, cv::Size(rw, rh));
+
+  
+        loadImg(frame,rh,rw,(float*)imgData,make_float3(127.5,127.5,127.5),0.007843);
+        cudaMemcpyAsync(imgCUDA,imgData,size,cudaMemcpyHostToDevice);
+
+//        void* buffers[] = { imgCUDA, output };
+
+        timer.tic();
+        tensorNet.imageInference( buffers, output_vector.size() + 1, BATCH_SIZE);
+        timer.toc();
+        double msTime = timer.t;
+
+//        vector<vector<float> > detections;
+
+        for (int k=0; k<100; k++)
+        {
+            if(output[7*k+1] == -1)
+                break;
+            float classIndex = output[7*k+1];
+            float confidence = output[7*k+2];
+            float xmin = output[7*k + 3];
+            float ymin = output[7*k + 4];
+            float xmax = output[7*k + 5];
+            float ymax = output[7*k + 6];
+            std::cout << classIndex << " , " << confidence << " , "  << xmin << " , " << ymin<< " , " << xmax<< " , " << ymax << std::endl;
+            int x1 = static_cast<int>(xmin * srcImg.cols);
+            int y1 = static_cast<int>(ymin * srcImg.rows);
+            int x2 = static_cast<int>(xmax * srcImg.cols);
+            int y2 = static_cast<int>(ymax * srcImg.rows);
+            cv::rectangle(srcImg,cv::Rect2f(cv::Point(x1,y1),cv::Point(x2,y2)),cv::Scalar(255,0,255),1);
+
+        }
+        std::cout << "time: " << msTime << std::endl;
+        cv::imshow("mobileNet",srcImg);
+        cv::waitKey(1);
     }
-    cv::imshow("mobileNet",srcImg);
-    cv::waitKey(40);
     free(imgData);
-    }
     cudaFree(imgCUDA);
     cudaFreeHost(imgCPU);
     cudaFree(output);

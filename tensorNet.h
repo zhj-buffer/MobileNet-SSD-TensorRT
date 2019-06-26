@@ -1,4 +1,8 @@
 #include "pluginImplement.h"
+#include <string>
+#include <list>
+#include <vector>
+#include <functional>
 
 using namespace nvinfer1;
 using namespace nvcaffeparser1;
