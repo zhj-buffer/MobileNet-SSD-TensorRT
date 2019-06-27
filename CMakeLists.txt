@@ -29,45 +29,48 @@ find_package(OpenCV REQUIRED)
 message(" -- CUDA and Opencv Found ")
 message(" -- opencv_version  "${OpenCV_VERSION})
 
+find_package(realsense2 REQUIRED)
+message(" -- realsense2 found")
+message(" -- realsense2_version  "${realsense2_VERSION})
 
 set(CUDA_NVCC_FLAGS
         ${CUDA_NVCC_FLAGS};--disable-warnings;
         -O3
-        -gencode arch=compute_30,code=sm_30
-        -gencode arch=compute_35,code=sm_35
         -gencode arch=compute_50,code=sm_50
         -gencode arch=compute_50,code=compute_50
         -gencode arch=compute_52,code=sm_52
-        -gencode arch=compute_61,code=sm_61
-	-gencode arch=compute_62,code=sm_62
         )
 
-file(GLOB cudaSources util/cuda/*.cu)
-file(GLOB cudaIncludes util/cuda/*.h)
+file(GLOB cudaSources util/cuda/*.cu *.cu)
+file(GLOB cudaIncludes util/cuda/*.h *.h)
 
 file(GLOB sources *.cu *.cpp util/*.cpp util/cuda/*.cu)
-file(GLOB includes util/*.h util/cuda/*.h)
+file(GLOB includes util/*.h util/cuda/*.h *.h)
+
+file(GLOB includes motor/*.h *.hpp)
+file(GLOB sources motor/*.cpp *.cpp)
 
 include_directories(${PROJECT_INCLUDE_DIR}/util)
+include_directories(${PROJECT_INCLUDE_DIR}/motor)
 include_directories(${PROJECT_BINARY_DIR}/util)
 include_directories(${OpenCV_INCLUDE_DIRS})
+include_directories(${realsense2_INCLUDE_DIRS})
+include_directories("/usr/local/include")
 ##
 
 link_directories(${OpenCV_LIBRARY_DIRS})
+link_directories("/usr/local/lib")
+link_directories(${realsense2_LIBRARY_DIRS})
 
-cuda_add_library(inferLib SHARED ${sources})
+cuda_add_library(inferLib SHARED ${sources} ${cudaSources})
 ##
-#target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvcaffe_parser.so)
-#target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvinfer.so)
-#target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvinfer_plugin.so)
-#target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvparsers.so)
-
-target_link_libraries(inferLib /usr/lib/x86_64-linux-gnu/libnvcaffe_parser.so)
-target_link_libraries(inferLib /usr/lib/x86_64-linux-gnu/libnvinfer.so)
-target_link_libraries(inferLib /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so)
-target_link_libraries(inferLib /usr/lib/x86_64-linux-gnu/libnvparsers.so)
-
-
+target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvcaffe_parser.so)
+target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvinfer.so)
+target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvinfer_plugin.so)
+target_link_libraries(inferLib /usr/lib/aarch64-linux-gnu/libnvparsers.so)
+#target_link_libraries("")
+#target_link_libraries(realsenseLib librealsense2.so)
+target_link_libraries(inferLib /usr/local/lib/librealsense2.so)
 
 
 # transfer all headers to the include directory
@@ -82,4 +85,4 @@ foreach(include ${includes})
 endforeach()
 
 add_executable(mobileNet main.cpp )
-target_link_libraries(mobileNet inferLib ${OpenCV_LIBS})
+target_link_libraries(mobileNet inferLib ${OpenCV_LIBS} ${realsense2_LIBS})
